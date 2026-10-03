@@ -1,416 +1,335 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
-from pathlib import Path
-
-import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+# Store all loaded signals and their names
+signals = []
+signal_names = []
 
-class SignalProcessingFramework(tk.Tk):
-    def __init__(self):
-        super().__init__()
 
-        self.title("Signal Processing Framework")
-        self.geometry("1250x760")
-        self.minsize(1050, 650)
+# Read a signal from a TXT file
+def read_signal():
+    file_name = filedialog.askopenfilename(
+        filetypes=[("Text Files", "*.txt")]
+    )
 
-        # Stored signals:
-        # {name: {"samples": np.ndarray, "source": str}}
-        self.signals = {}
-        self.signal_counter = 0
+    if file_name == "":
+        return
 
-        self._build_menu()
-        self._build_ui()
+    file = open(file_name, "r")
+    data = file.read()
+    file.close()
 
-    # ------------------------- UI -------------------------
+    # Allow values separated by commas or spaces
+    data = data.replace(",", " ")
+    values = data.split()
 
-    def _build_menu(self):
-        menubar = tk.Menu(self)
+    signal = []
 
-        file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Load Signal from TXT", command=self.load_signal)
-        file_menu.add_command(label="Clear All Signals", command=self.clear_all)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.destroy)
-        menubar.add_cascade(label="File", menu=file_menu)
+    # Convert text values into numbers
+    for value in values:
+        signal.append(float(value))
 
-        arithmetic_menu = tk.Menu(menubar, tearoff=0)
-        arithmetic_menu.add_command(label="Addition", command=self.add_signals)
-        arithmetic_menu.add_command(label="Multiplication", command=self.multiply_signal)
-        menubar.add_cascade(label="Arithmetic Operations", menu=arithmetic_menu)
+    if len(signal) == 0:
+        messagebox.showwarning(
+            "Error",
+            "The file does not contain any signal samples."
+        )
+        return
 
-        help_menu = tk.Menu(menubar, tearoff=0)
-        help_menu.add_command(label="About", command=self.show_about)
-        menubar.add_cascade(label="Help", menu=help_menu)
+    # Store the new signal
+    signals.append(signal)
+    name = "Signal " + str(len(signals))
+    signal_names.append(name)
 
-        self.config(menu=menubar)
+    signal_list.insert(tk.END, name)
 
-    def _build_ui(self):
-        top = tk.Frame(self, padx=10, pady=8)
-        top.pack(fill=tk.X)
+    # Select the newly loaded signal
+    signal_list.selection_clear(0, tk.END)
+    signal_list.selection_set(tk.END)
 
-        tk.Label(
-            top,
-            text="Signal Processing Framework",
-            font=("Arial", 20, "bold")
-        ).pack(side=tk.LEFT)
+    display_selected_signals()
 
-        tk.Button(
-            top, text="Load TXT Signal", command=self.load_signal,
-            width=16, height=2
-        ).pack(side=tk.RIGHT, padx=4)
 
-        tk.Button(
-            top, text="Clear All", command=self.clear_all,
-            width=12, height=2
-        ).pack(side=tk.RIGHT, padx=4)
+# Display the selected signals
+def display_selected_signals():
+    selected = signal_list.curselection()
 
-        # Left control panel
-        left = tk.Frame(self, width=300, padx=10, pady=5)
-        left.pack(side=tk.LEFT, fill=tk.Y)
-        left.pack_propagate(False)
+    ax1.clear()
+    ax2.clear()
 
-        tk.Label(left, text="Loaded Signals", font=("Arial", 13, "bold")).pack(
-            anchor="w", pady=(0, 5)
+    if len(selected) == 0:
+        ax1.set_title("Continuous Representation")
+        ax2.set_title("Discrete Representation")
+        canvas.draw()
+        return
+
+    for index in selected:
+        signal = signals[index]
+
+        # Create sample numbers: 0, 1, 2, 3, ...
+        x = []
+
+        for i in range(len(signal)):
+            x.append(i)
+
+        # Continuous representation
+        ax1.plot(
+            x,
+            signal,
+            marker="o",
+            label=signal_names[index]
         )
 
-        list_frame = tk.Frame(left)
-        list_frame.pack(fill=tk.BOTH, expand=False)
-
-        self.signal_list = tk.Listbox(
-            list_frame,
-            selectmode=tk.EXTENDED,
-            height=13,
-            exportselection=False
-        )
-        self.signal_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        scrollbar = tk.Scrollbar(list_frame, command=self.signal_list.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.signal_list.config(yscrollcommand=scrollbar.set)
-
-        self.signal_list.bind("<<ListboxSelect>>", self.on_selection_change)
-
-        tk.Label(
-            left,
-            text="Select 1 signal for multiplication\nor 2+ signals for addition.",
-            justify=tk.LEFT,
-            fg="gray"
-        ).pack(anchor="w", pady=8)
-
-        tk.Button(
-            left, text="Addition", command=self.add_signals,
-            height=2
-        ).pack(fill=tk.X, pady=3)
-
-        tk.Button(
-            left, text="Multiply by Constant", command=self.multiply_signal,
-            height=2
-        ).pack(fill=tk.X, pady=3)
-
-        tk.Button(
-            left, text="Plot Selected Signal(s)", command=self.plot_selected,
-            height=2
-        ).pack(fill=tk.X, pady=3)
-
-        self.status = tk.StringVar(value="Load a TXT file to begin.")
-        tk.Label(
-            left, textvariable=self.status, wraplength=270,
-            justify=tk.LEFT, fg="navy"
-        ).pack(anchor="w", pady=12)
-
-        tk.Label(left, text="Signal data format", font=("Arial", 11, "bold")).pack(
-            anchor="w", pady=(15, 4)
-        )
-        tk.Label(
-            left,
-            text="TXT files may contain samples separated by spaces, commas, "
-                 "or new lines.\n\nExample:\n1 2 3 4 5 3 2 1",
-            justify=tk.LEFT,
-            fg="gray"
-        ).pack(anchor="w")
-
-        # Plot area
-        right = tk.Frame(self, padx=5, pady=5)
-        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
-
-        self.figure, self.axes = plt.subplots(2, 1, figsize=(8, 7))
-        self.figure.subplots_adjust(hspace=0.45, left=0.08, right=0.97,
-                                    top=0.94, bottom=0.08)
-
-        self.canvas = FigureCanvasTkAgg(self.figure, master=right)
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-        self._show_empty_plots()
-
-    # ------------------------- File handling -------------------------
-
-    def load_signal(self):
-        filepath = filedialog.askopenfilename(
-            title="Select Signal TXT File",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        # Discrete representation
+        ax2.stem(
+            x,
+            signal,
+            label=signal_names[index]
         )
 
-        if not filepath:
-            return
+    ax1.set_title("Continuous Representation")
+    ax2.set_title("Discrete Representation")
 
-        try:
-            samples = self.read_txt_signal(filepath)
+    ax1.set_xlabel("Sample")
+    ax1.set_ylabel("Amplitude")
+    ax2.set_xlabel("Sample")
+    ax2.set_ylabel("Amplitude")
 
-            if samples.size == 0:
-                raise ValueError("The selected file contains no numeric samples.")
+    ax1.grid()
+    ax2.grid()
 
-            self.signal_counter += 1
-            base_name = Path(filepath).stem
-            name = base_name
+    ax1.legend()
+    ax2.legend()
 
-            # Avoid duplicate names.
-            if name in self.signals:
-                name = f"{base_name}_{self.signal_counter}"
+    canvas.draw()
 
-            self.signals[name] = {
-                "samples": samples,
-                "source": filepath
-            }
 
-            self.signal_list.insert(tk.END, name)
-            self.status.set(
-                f"Loaded '{name}' successfully.\n"
-                f"Samples: {len(samples)}"
-            )
+# Add any number of selected signals
+def addition():
+    selected = signal_list.curselection()
 
-            # Automatically display the newly loaded signal.
-            self.signal_list.selection_clear(0, tk.END)
-            self.signal_list.selection_set(tk.END)
-            self.plot_selected()
-
-        except Exception as exc:
-            messagebox.showerror("Error Loading Signal", str(exc))
-
-    @staticmethod
-    def read_txt_signal(filepath):
-        # Accept spaces, commas, tabs, and newlines.
-        text = Path(filepath).read_text(encoding="utf-8")
-        text = text.replace(",", " ").replace(";", " ")
-        values = np.fromstring(text, sep=" ")
-
-        if values.size == 0:
-            # Fallback for files with unusual whitespace.
-            tokens = text.split()
-            values = np.array([float(x) for x in tokens], dtype=float)
-
-        return values
-
-    # ------------------------- Plotting -------------------------
-
-    def _show_empty_plots(self):
-        for ax in self.axes:
-            ax.clear()
-            ax.grid(True, alpha=0.25)
-
-        self.axes[0].set_title("Continuous Representation")
-        self.axes[0].set_xlabel("Sample Index")
-        self.axes[0].set_ylabel("Amplitude")
-
-        self.axes[1].set_title("Discrete Representation")
-        self.axes[1].set_xlabel("Sample Index")
-        self.axes[1].set_ylabel("Amplitude")
-
-        self.canvas.draw()
-
-    def plot_selected(self):
-        indices = self.signal_list.curselection()
-
-        if not indices:
-            messagebox.showinfo("No Selection", "Select at least one signal.")
-            return
-
-        selected = [
-            self.signal_list.get(i)
-            for i in indices
-        ]
-
-        self.plot_names(selected)
-
-    def plot_names(self, names):
-        for ax in self.axes:
-            ax.clear()
-            ax.grid(True, alpha=0.25)
-
-        for name in names:
-            samples = self.signals[name]["samples"]
-            n = np.arange(len(samples))
-
-            self.axes[0].plot(
-                n, samples, marker="o", linewidth=1.5, markersize=3,
-                label=name
-            )
-
-            self.axes[1].stem(
-                n, samples, linefmt="-", markerfmt="o",
-                basefmt=" ", label=name
-            )
-
-        self.axes[0].set_title("Continuous Representation")
-        self.axes[0].set_xlabel("Sample Index")
-        self.axes[0].set_ylabel("Amplitude")
-        self.axes[0].legend(loc="best")
-
-        self.axes[1].set_title("Discrete Representation")
-        self.axes[1].set_xlabel("Sample Index")
-        self.axes[1].set_ylabel("Amplitude")
-        self.axes[1].legend(loc="best")
-
-        self.figure.tight_layout()
-        self.canvas.draw()
-
-        self.status.set(
-            "Displaying: " + ", ".join(names)
+    # At least two signals are needed
+    if len(selected) < 2:
+        messagebox.showwarning(
+            "Addition",
+            "Please select at least two signals."
         )
+        return
 
-    # ------------------------- Arithmetic -------------------------
+    # All signals must have the same number of samples
+    first_length = len(signals[selected[0]])
 
-    def add_signals(self):
-        indices = self.signal_list.curselection()
-
-        if len(indices) < 2:
+    for index in selected:
+        if len(signals[index]) != first_length:
             messagebox.showwarning(
-                "Addition",
-                "Select at least two signals for addition."
-            )
-            return
-
-        names = [self.signal_list.get(i) for i in indices]
-        arrays = [self.signals[name]["samples"] for name in names]
-
-        lengths = [len(arr) for arr in arrays]
-        if len(set(lengths)) != 1:
-            messagebox.showerror(
                 "Addition Error",
-                "All signals must contain the same number of samples "
-                "for sample-by-sample addition.\n\n"
-                f"Selected lengths: {lengths}"
+                "All signals must have the same number of samples."
             )
             return
 
-        result = np.sum(arrays, axis=0)
+    result = []
 
-        result_name = self._unique_result_name(
-            "Addition(" + " + ".join(names) + ")"
-        )
-        self.signals[result_name] = {
-            "samples": result,
-            "source": "Generated by addition"
-        }
+    # Add corresponding samples from all selected signals
+    for i in range(first_length):
+        total = 0
 
-        self.signal_list.insert(tk.END, result_name)
+        for index in selected:
+            total = total + signals[index][i]
 
-        self.signal_list.selection_clear(0, tk.END)
-        self.signal_list.selection_set(tk.END)
+        result.append(total)
 
-        self.plot_names([result_name])
+    display_result(result, "Addition Result")
 
-        self.status.set(
-            f"Created {result_name}\n"
-            f"Number of samples: {len(result)}"
-        )
 
-    def multiply_signal(self):
-        indices = self.signal_list.curselection()
+# Multiply one signal by a constant
+def multiplication():
+    selected = signal_list.curselection()
 
-        if len(indices) != 1:
-            messagebox.showwarning(
-                "Multiplication",
-                "Select exactly one signal for multiplication."
-            )
-            return
-
-        name = self.signal_list.get(indices[0])
-
-        constant = simpledialog.askfloat(
+    # Only one signal should be selected
+    if len(selected) != 1:
+        messagebox.showwarning(
             "Multiplication",
-            f"Enter a constant to multiply '{name}' by:",
-            parent=self
+            "Please select exactly one signal."
         )
+        return
 
-        if constant is None:
-            return
+    index = selected[0]
+    signal = signals[index]
 
-        result = self.signals[name]["samples"] * constant
+    # Ask the user for the multiplication constant
+    constant = simpledialog.askfloat(
+        "Multiplication",
+        "Enter the constant:"
+    )
 
-        result_name = self._unique_result_name(
-            f"{name} x {constant:g}"
-        )
-        self.signals[result_name] = {
-            "samples": result,
-            "source": f"Generated by multiplying {name} by {constant:g}"
-        }
+    if constant is None:
+        return
 
-        self.signal_list.insert(tk.END, result_name)
+    result = []
 
-        self.signal_list.selection_clear(0, tk.END)
-        self.signal_list.selection_set(tk.END)
+    for i in range(len(signal)):
+        result.append(signal[i] * constant)
 
-        self.plot_names([result_name])
-
-        extra = ""
-        if constant == -1:
-            extra = "\nThe signal was inverted."
-
-        self.status.set(
-            f"Created {result_name}\n"
-            f"Constant: {constant:g}{extra}"
-        )
-
-    # ------------------------- Helpers -------------------------
-
-    def _unique_result_name(self, base):
-        name = base
-        counter = 2
-
-        while name in self.signals:
-            name = f"{base} #{counter}"
-            counter += 1
-
-        return name
-
-    def on_selection_change(self, _event=None):
-        selected = self.signal_list.curselection()
-        if selected:
-            names = [self.signal_list.get(i) for i in selected]
-            self.status.set("Selected: " + ", ".join(names))
-
-    def clear_all(self):
-        if not self.signals:
-            return
-
-        answer = messagebox.askyesno(
-            "Clear All",
-            "Remove all loaded and generated signals?"
-        )
-        if not answer:
-            return
-
-        self.signals.clear()
-        self.signal_list.delete(0, tk.END)
-        self._show_empty_plots()
-        self.status.set("All signals cleared.")
-
-    def show_about(self):
-        messagebox.showinfo(
-            "About",
-            "Signal Processing Framework\n\n"
-            "Features:\n"
-            "• Read signals from TXT files\n"
-            "• Continuous representation\n"
-            "• Discrete representation\n"
-            "• Addition of multiple signals\n"
-            "• Multiplication by a constant\n"
-            "• Display multiple signals at the same time"
-        )
+    display_result(result, "Multiplication Result")
 
 
-if __name__ == "__main__":
-    app = SignalProcessingFramework()
-    app.mainloop()
+# Display the result of an arithmetic operation
+def display_result(result, title):
+    ax1.clear()
+    ax2.clear()
+
+    x = []
+
+    for i in range(len(result)):
+        x.append(i)
+
+    ax1.plot(x, result, marker="o")
+    ax2.stem(x, result)
+
+    ax1.set_title(title + " - Continuous")
+    ax2.set_title(title + " - Discrete")
+
+    ax1.set_xlabel("Sample")
+    ax1.set_ylabel("Amplitude")
+    ax2.set_xlabel("Sample")
+    ax2.set_ylabel("Amplitude")
+
+    ax1.grid()
+    ax2.grid()
+
+    canvas.draw()
+
+
+# Remove all signals and clear the graphs
+def clear_signals():
+    signals.clear()
+    signal_names.clear()
+
+    signal_list.delete(0, tk.END)
+
+    ax1.clear()
+    ax2.clear()
+
+    ax1.set_title("Continuous Representation")
+    ax2.set_title("Discrete Representation")
+
+    canvas.draw()
+
+
+# Create the main window
+window = tk.Tk()
+window.title("Signal Processing Framework")
+window.geometry("1200x750")
+
+
+# ==================== MENU BAR ====================
+
+menu_bar = tk.Menu(window)
+
+# File menu
+file_menu = tk.Menu(menu_bar, tearoff=0)
+file_menu.add_command(label="Load Signal", command=read_signal)
+file_menu.add_command(label="Clear All Signals", command=clear_signals)
+file_menu.add_separator()
+file_menu.add_command(label="Exit", command=window.destroy)
+
+menu_bar.add_cascade(
+    label="File",
+    menu=file_menu
+)
+
+# Arithmetic Operations menu
+arithmetic_menu = tk.Menu(menu_bar, tearoff=0)
+
+arithmetic_menu.add_command(
+    label="Addition",
+    command=addition
+)
+
+arithmetic_menu.add_command(
+    label="Multiplication",
+    command=multiplication
+)
+
+menu_bar.add_cascade(
+    label="Arithmetic Operations",
+    menu=arithmetic_menu
+)
+
+window.config(menu=menu_bar)
+
+
+# ==================== BUTTONS ====================
+
+load_button = tk.Button(
+    window,
+    text="Load Signal",
+    command=read_signal,
+    width=20
+)
+load_button.pack(pady=5)
+
+addition_button = tk.Button(
+    window,
+    text="Addition",
+    command=addition,
+    width=20
+)
+addition_button.pack(pady=5)
+
+multiplication_button = tk.Button(
+    window,
+    text="Multiplication",
+    command=multiplication,
+    width=20
+)
+multiplication_button.pack(pady=5)
+
+clear_button = tk.Button(
+    window,
+    text="Clear All",
+    command=clear_signals,
+    width=20
+)
+clear_button.pack(pady=5)
+
+
+# ==================== SIGNAL LIST ====================
+
+# EXTENDED allows selecting multiple signals
+signal_list = tk.Listbox(
+    window,
+    height=8,
+    width=40,
+    selectmode=tk.EXTENDED
+)
+signal_list.pack(pady=10)
+
+# Update the graphs whenever the selection changes
+signal_list.bind(
+    "<<ListboxSelect>>",
+    lambda event: display_selected_signals()
+)
+
+
+# ==================== GRAPHS ====================
+
+figure, (ax1, ax2) = plt.subplots(2, 1)
+figure.tight_layout(h_pad=3)
+
+# Put the Matplotlib graphs inside the Tkinter window
+canvas = FigureCanvasTkAgg(
+    figure,
+    master=window
+)
+
+canvas.get_tk_widget().pack(
+    fill=tk.BOTH,
+    expand=True
+)
+
+
+# Start the program
+window.mainloop()
