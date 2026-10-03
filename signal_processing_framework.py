@@ -3,6 +3,12 @@ from tkinter import filedialog, messagebox, simpledialog
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+# Import the test functions provided by the instructor
+from test import (
+    AddSignalSamplesAreEqual,
+    MultiplySignalByConst
+)
+
 # Store all signals
 signals = []
 signal_names = []
@@ -27,7 +33,6 @@ def read_signal():
     file.readline()
     file.readline()
 
-    # Read index and sample
     line = file.readline()
 
     while line:
@@ -48,7 +53,6 @@ def read_signal():
         )
         return
 
-    # Store the signal
     signals.append({
         "indices": indices,
         "samples": samples
@@ -59,7 +63,6 @@ def read_signal():
 
     signal_list.insert(tk.END, name)
 
-    # Select the new signal
     signal_list.selection_clear(0, tk.END)
     signal_list.selection_set(tk.END)
 
@@ -84,7 +87,6 @@ def display_selected_signals():
         indices = signals[index]["indices"]
         samples = signals[index]["samples"]
 
-        # Continuous representation
         ax1.plot(
             indices,
             samples,
@@ -92,7 +94,6 @@ def display_selected_signals():
             label=signal_names[index]
         )
 
-        # Discrete representation
         ax2.stem(
             indices,
             samples,
@@ -117,35 +118,19 @@ def display_selected_signals():
     canvas.draw()
 
 
-# Add any number of signals
-def addition():
-    selected = signal_list.curselection()
+# Add signals
+def add_signals(selected):
 
-    if len(selected) < 2:
-        messagebox.showwarning(
-            "Addition",
-            "Please select at least two signals."
-        )
-        return
-
-    # Check that all signals have the same length
     first_length = len(signals[selected[0]]["samples"])
 
     for index in selected:
 
         if len(signals[index]["samples"]) != first_length:
-            messagebox.showwarning(
-                "Addition Error",
-                "All signals must have the same number of samples."
-            )
-            return
+            return None, None
 
-    # Use the indices of the first signal
     result_indices = signals[selected[0]]["indices"]
-
     result_samples = []
 
-    # Add corresponding samples
     for i in range(first_length):
 
         total = 0
@@ -155,15 +140,55 @@ def addition():
 
         result_samples.append(total)
 
+    return result_indices, result_samples
+
+
+# Addition operation from the GUI
+def addition():
+
+    selected = signal_list.curselection()
+
+    if len(selected) < 2:
+        messagebox.showwarning(
+            "Addition",
+            "Please select at least two signals."
+        )
+        return
+
+    result_indices, result_samples = add_signals(selected)
+
+    if result_indices is None:
+        messagebox.showwarning(
+            "Addition Error",
+            "All signals must have the same number of samples."
+        )
+        return
+
     display_result(
         result_indices,
         result_samples,
         "Addition Result"
     )
 
+    return result_indices, result_samples
 
-# Multiply a signal by a constant
+
+# Multiply signal by a constant
+def multiply_signal(indices, samples, constant):
+
+    result_samples = []
+
+    for i in range(len(samples)):
+        result_samples.append(
+            samples[i] * constant
+        )
+
+    return indices, result_samples
+
+
+# Multiplication operation from the GUI
 def multiplication():
+
     selected = signal_list.curselection()
 
     if len(selected) != 1:
@@ -178,7 +203,6 @@ def multiplication():
     indices = signals[index]["indices"]
     samples = signals[index]["samples"]
 
-    # Ask for the constant
     constant = simpledialog.askfloat(
         "Multiplication",
         "Enter the constant:"
@@ -187,19 +211,19 @@ def multiplication():
     if constant is None:
         return
 
-    result_samples = []
-
-    # Multiply every sample
-    for i in range(len(samples)):
-        result_samples.append(
-            samples[i] * constant
-        )
+    result_indices, result_samples = multiply_signal(
+        indices,
+        samples,
+        constant
+    )
 
     display_result(
-        indices,
+        result_indices,
         result_samples,
         "Multiplication Result"
     )
+
+    return result_indices, result_samples
 
 
 # Display an arithmetic result
@@ -234,6 +258,173 @@ def display_result(indices, samples, title):
     canvas.draw()
 
 
+# Run the instructor tests
+def run_tests():
+
+    print("\n==============================")
+    print("Running Signal Processing Tests")
+    print("==============================\n")
+
+    # Read Signal 1
+    signal1_file = "resources/task1/inputs/Signal1.txt"
+
+    signal1_indices = []
+    signal1_samples = []
+
+    file = open(signal1_file, "r")
+
+    file.readline()
+    file.readline()
+    file.readline()
+
+    line = file.readline()
+
+    while line:
+        parts = line.strip().split()
+
+        if len(parts) >= 2:
+            signal1_indices.append(int(parts[0]))
+            signal1_samples.append(float(parts[1]))
+
+        line = file.readline()
+
+    file.close()
+
+
+    # Read Signal 2
+    signal2_file = "resources/task1/inputs/Signal2.txt"
+
+    signal2_indices = []
+    signal2_samples = []
+
+    file = open(signal2_file, "r")
+
+    file.readline()
+    file.readline()
+    file.readline()
+
+    line = file.readline()
+
+    while line:
+        parts = line.strip().split()
+
+        if len(parts) >= 2:
+            signal2_indices.append(int(parts[0]))
+            signal2_samples.append(float(parts[1]))
+
+        line = file.readline()
+
+    file.close()
+
+
+    # Read Signal 3
+    signal3_file = "resources/task1/inputs/Signal3.txt"
+
+    signal3_indices = []
+    signal3_samples = []
+
+    file = open(signal3_file, "r")
+
+    file.readline()
+    file.readline()
+    file.readline()
+
+    line = file.readline()
+
+    while line:
+        parts = line.strip().split()
+
+        if len(parts) >= 2:
+            signal3_indices.append(int(parts[0]))
+            signal3_samples.append(float(parts[1]))
+
+        line = file.readline()
+
+    file.close()
+
+
+    # ==========================
+    # Signal 1 + Signal 2
+    # ==========================
+
+    result_indices = signal1_indices
+    result_samples = []
+
+    for i in range(len(signal1_samples)):
+        result_samples.append(
+            signal1_samples[i] + signal2_samples[i]
+        )
+
+    AddSignalSamplesAreEqual(
+        "Signal1.txt",
+        "Signal2.txt",
+        result_indices,
+        result_samples,
+        "resources/task1/outputs/Signal1+Signal2.txt"
+    )
+
+
+    # ==========================
+    # Signal 1 + Signal 3
+    # ==========================
+
+    result_indices = signal1_indices
+    result_samples = []
+
+    for i in range(len(signal1_samples)):
+        result_samples.append(
+            signal1_samples[i] + signal3_samples[i]
+        )
+
+    AddSignalSamplesAreEqual(
+        "Signal1.txt",
+        "Signal3.txt",
+        result_indices,
+        result_samples,
+        "resources/task1/outputs/Signal1+Signal3.txt"
+    )
+
+
+    # ==========================
+    # Signal 1 * 5
+    # ==========================
+
+    result_indices, result_samples = multiply_signal(
+        signal1_indices,
+        signal1_samples,
+        5
+    )
+
+    MultiplySignalByConst(
+        5,
+        result_indices,
+        result_samples,
+        "resources/task1/outputs/MultiplySignalByConstant-Signal1 - by 5.txt"
+    )
+
+
+    # ==========================
+    # Signal 2 * 10
+    # ==========================
+
+    result_indices, result_samples = multiply_signal(
+        signal2_indices,
+        signal2_samples,
+        10
+    )
+
+    MultiplySignalByConst(
+        10,
+        result_indices,
+        result_samples,
+        "resources/task1/outputs/MultiplySignalByConstant-Signal2 - by 10.txt"
+    )
+
+    print("\n==============================")
+    print("Tests Finished")
+    print("==============================\n")
+
+
 # Clear all signals
 def clear_signals():
 
@@ -266,6 +457,7 @@ window.geometry("1200x750")
 # ============================================================
 
 menu_bar = tk.Menu(window)
+
 
 # File menu
 file_menu = tk.Menu(
@@ -315,6 +507,23 @@ arithmetic_menu.add_command(
 menu_bar.add_cascade(
     label="Arithmetic Operations",
     menu=arithmetic_menu
+)
+
+
+# Testing menu
+test_menu = tk.Menu(
+    menu_bar,
+    tearoff=0
+)
+
+test_menu.add_command(
+    label="Run Tests",
+    command=run_tests
+)
+
+menu_bar.add_cascade(
+    label="Testing",
+    menu=test_menu
 )
 
 window.config(menu=menu_bar)
@@ -368,7 +577,6 @@ clear_button.pack(pady=5)
 # SIGNAL LIST
 # ============================================================
 
-# EXTENDED allows selecting multiple signals
 signal_list = tk.Listbox(
     window,
     height=8,
@@ -378,8 +586,6 @@ signal_list = tk.Listbox(
 
 signal_list.pack(pady=10)
 
-
-# Update the graphs when the selection changes
 signal_list.bind(
     "<<ListboxSelect>>",
     lambda event: display_selected_signals()
