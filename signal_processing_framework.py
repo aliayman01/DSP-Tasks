@@ -1,6 +1,5 @@
-
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog
+from tkinter import ttk, filedialog, messagebox, simpledialog
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from test import AddSignalSamplesAreEqual, MultiplySignalByConst, SignalSamplesAreEqual
@@ -10,7 +9,8 @@ from QuanTest2 import QuantizationTest2
 signals = []
 signal_names = []
 
-# COMMON FUNCTIONS
+# ==================== COMMON FUNCTIONS ====================
+
 def read_signal_file(file_name):
     indices, samples = [], []
     with open(file_name, "r") as file:
@@ -40,7 +40,9 @@ def show_result(indices, samples, title):
     canvas.draw()
 
 def read_signal():
-    file_name = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
+    file_name = filedialog.askopenfilename(
+        filetypes=[("Text Files", "*.txt")]
+    )
     if not file_name:
         return
     try:
@@ -91,6 +93,7 @@ def clear_signals():
     ax2.set_title("Discrete Representation")
     canvas.draw()
 
+
 # ==================== TASK 1 ====================
 
 # Addition
@@ -138,13 +141,16 @@ def multiplication():
     constant = simpledialog.askfloat("Multiplication", "Enter the constant:")
     if constant is None:
         return
-    indices, samples = multiply_signal(signal["indices"], signal["samples"], constant)
+    indices, samples = multiply_signal(
+        signal["indices"], signal["samples"], constant
+    )
     show_result(indices, samples, "Multiplication Result")
     return indices, samples
 
+
 # ==================== TASK 2 ====================
 
-# Subtraction: the expected reference outputs determine the order
+# Subtraction: second selected signal minus first selected signal
 def subtract_signals(selected):
     if len(selected) != 2:
         return None, None
@@ -212,7 +218,9 @@ def normalization():
             messagebox.showwarning("Normalization", "Enter -1 to 1 or 0 to 1.")
         return
     signal = signals[selected[0]]
-    indices, samples = normalize_signal(signal["indices"], signal["samples"], mode)
+    indices, samples = normalize_signal(
+        signal["indices"], signal["samples"], mode
+    )
     show_result(indices, samples, "Normalized Signal (" + mode + ")")
     return indices, samples
 
@@ -231,17 +239,23 @@ def accumulation():
         messagebox.showwarning("Accumulation", "Select exactly one signal.")
         return
     signal = signals[selected[0]]
-    indices, samples = accumulate_signal(signal["indices"], signal["samples"])
+    indices, samples = accumulate_signal(
+        signal["indices"], signal["samples"]
+    )
     show_result(indices, samples, "Accumulated Signal")
     return indices, samples
 
-# Quantization
+
+# ==================== QUANTIZATION ====================
+
 def quantize_signal(indices, samples, levels):
     if levels < 2:
         raise ValueError("The number of levels must be at least 2.")
+
     minimum = min(samples)
     maximum = max(samples)
     step = (maximum - minimum) / levels
+
     interval_indices, encoded_values = [], []
     quantized_values, errors = [], []
     bits = (levels - 1).bit_length()
@@ -254,20 +268,109 @@ def quantize_signal(indices, samples, levels):
             interval = int((sample - minimum) / step)
             interval = max(0, min(interval, levels - 1))
             quantized = minimum + (interval + 0.5) * step
+
         interval_indices.append(interval + 1)
         encoded_values.append(format(interval, "0" + str(bits) + "b"))
         quantized_values.append(quantized)
         errors.append(quantized - sample)
+
     return interval_indices, encoded_values, quantized_values, errors
+
+
+# New: show the quantization table and error graph in a separate window
+def show_quantization_details(indices, samples, intervals, encoded, quantized, errors):
+    details_window = tk.Toplevel(window)
+    details_window.title("Quantization Results")
+    details_window.geometry("1150x600")
+    details_window.minsize(850, 450)
+
+    main_frame = ttk.Frame(details_window, padding=10)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    # Quantization table
+    table_frame = ttk.LabelFrame(main_frame, text="Quantization Table", padding=5)
+    table_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+
+    columns = ("n", "x", "interval", "encoded", "xq", "error", "error_sq")
+    table = ttk.Treeview(table_frame, columns=columns, show="headings")
+
+    headings = {
+        "n": "n",
+        "x": "x[n]",
+        "interval": "Interval",
+        "encoded": "Encoded",
+        "xq": "xq[n]",
+        "error": "e[n]",
+        "error_sq": "e[n]^2"
+    }
+
+    widths = {
+        "n": 45, "x": 75, "interval": 65, "encoded": 70,
+        "xq": 75, "error": 75, "error_sq": 75
+    }
+
+    for column in columns:
+        table.heading(column, text=headings[column])
+        table.column(column, width=widths[column], anchor="center")
+
+    y_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=table.yview)
+    x_scroll = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=table.xview)
+    table.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+
+    table.grid(row=0, column=0, sticky="nsew")
+    y_scroll.grid(row=0, column=1, sticky="ns")
+    x_scroll.grid(row=1, column=0, sticky="ew")
+    table_frame.rowconfigure(0, weight=1)
+    table_frame.columnconfigure(0, weight=1)
+
+    for i in range(len(samples)):
+        table.insert("", tk.END, values=(
+            indices[i],
+            f"{samples[i]:.6g}",
+            intervals[i],
+            encoded[i],
+            f"{quantized[i]:.6g}",
+            f"{errors[i]:.6g}",
+            f"{errors[i] ** 2:.6g}"
+        ))
+
+    # Quantization error graph
+    plot_frame = ttk.LabelFrame(main_frame, text="Quantization Error Graph", padding=5)
+    plot_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+    error_figure, error_ax = plt.subplots(figsize=(5, 4))
+    error_ax.plot(indices, errors, linewidth=1)
+    error_ax.axhline(0, linestyle="--", linewidth=0.8)
+    error_ax.set_title("Quantization Error")
+    error_ax.set_xlabel("Sample Index (n)")
+    error_ax.set_ylabel("Error e[n]")
+    error_ax.grid(True)
+    error_figure.tight_layout()
+
+    error_canvas = FigureCanvasTkAgg(error_figure, master=plot_frame)
+    error_canvas.draw()
+    error_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def close_details():
+        plt.close(error_figure)
+        details_window.destroy()
+
+    details_window.protocol("WM_DELETE_WINDOW", close_details)
+
 
 def quantization():
     selected = signal_list.curselection()
     if len(selected) != 1:
         messagebox.showwarning("Quantization", "Select exactly one signal.")
         return
-    answer = simpledialog.askstring("Quantization", "Enter number of levels or bits (e.g. 4 or 3 bits):")
+
+    answer = simpledialog.askstring(
+        "Quantization",
+        "Enter number of levels or bits (e.g. 4 or 3 bits):"
+    )
     if answer is None:
         return
+
     try:
         if "bit" in answer.lower():
             bits = int(answer.lower().replace("bits", "").replace("bit", "").strip())
@@ -276,6 +379,7 @@ def quantization():
             levels = 2 ** bits
         else:
             levels = int(answer)
+
         signal = signals[selected[0]]
         interval, encoded, quantized, errors = quantize_signal(
             signal["indices"], signal["samples"], levels
@@ -283,13 +387,21 @@ def quantization():
     except ValueError:
         messagebox.showerror("Quantization", "Enter a valid number of levels or bits.")
         return
+
     print("\nQuantization Results")
     print("Interval indices:", interval)
     print("Encoded values:", encoded)
     print("Quantized values:", quantized)
     print("Quantization errors:", errors)
+
+    # Keep the existing graph display, then open the new table and error graph
     show_result(signal["indices"], quantized, "Quantized Signal")
+    show_quantization_details(
+        signal["indices"], signal["samples"],
+        interval, encoded, quantized, errors
+    )
     return interval, encoded, quantized, errors
+
 
 # ==================== TESTING ====================
 
@@ -308,54 +420,79 @@ def run_tests():
     ])
 
     indices, samples = add_signals([0, 1])
-    AddSignalSamplesAreEqual("Signal1.txt", "Signal2.txt", indices, samples,
-        "resources/task1/outputs/Signal1+Signal2.txt")
+    AddSignalSamplesAreEqual(
+        "Signal1.txt", "Signal2.txt", indices, samples,
+        "resources/task1/outputs/Signal1+Signal2.txt"
+    )
     indices, samples = add_signals([0, 2])
-    AddSignalSamplesAreEqual("Signal1.txt", "Signal3.txt", indices, samples,
-        "resources/task1/outputs/Signal1+Signal3.txt")
+    AddSignalSamplesAreEqual(
+        "Signal1.txt", "Signal3.txt", indices, samples,
+        "resources/task1/outputs/Signal1+Signal3.txt"
+    )
     indices, samples = multiply_signal(s1i, s1, 5)
-    MultiplySignalByConst(5, indices, samples,
-        "resources/task1/outputs/MultiplySignalByConstant-Signal1 - by 5.txt")
+    MultiplySignalByConst(
+        5, indices, samples,
+        "resources/task1/outputs/MultiplySignalByConstant-Signal1 - by 5.txt"
+    )
     indices, samples = multiply_signal(s2i, s2, 10)
-    MultiplySignalByConst(10, indices, samples,
-        "resources/task1/outputs/MultiplySignalByConstant-Signal2 - by 10.txt")
+    MultiplySignalByConst(
+        10, indices, samples,
+        "resources/task1/outputs/MultiplySignalByConstant-Signal2 - by 10.txt"
+    )
 
     print("\n===== TASK 2 TESTS =====")
     indices, samples = subtract_signals([0, 1])
-    SignalSamplesAreEqual("Subtraction", "resources/task2/outputs/signal1-signal2.txt",
-        indices, samples)
+    SignalSamplesAreEqual(
+        "Subtraction", "resources/task2/outputs/signal1-signal2.txt",
+        indices, samples
+    )
     indices, samples = subtract_signals([0, 2])
-    SignalSamplesAreEqual("Subtraction", "resources/task2/outputs/signal1-signal3.txt",
-        indices, samples)
+    SignalSamplesAreEqual(
+        "Subtraction", "resources/task2/outputs/signal1-signal3.txt",
+        indices, samples
+    )
     indices, samples = square_signal(s1i, s1)
-    SignalSamplesAreEqual("Squaring", "resources/task2/outputs/Output squaring signal 1.txt",
-        indices, samples)
+    SignalSamplesAreEqual(
+        "Squaring", "resources/task2/outputs/Output squaring signal 1.txt",
+        indices, samples
+    )
     indices, samples = normalize_signal(s1i, s1, "-1 to 1")
-    SignalSamplesAreEqual("Normalization",
+    SignalSamplesAreEqual(
+        "Normalization",
         "resources/task2/outputs/normalize of signal 1 (from -1 to 1)-- output.txt",
-        indices, samples)
+        indices, samples
+    )
     indices, samples = normalize_signal(s2i, s2, "0 to 1")
-    SignalSamplesAreEqual("Normalization",
+    SignalSamplesAreEqual(
+        "Normalization",
         "resources/task2/outputs/normlize signal 2 (from 0 to 1 )-- output.txt",
-        indices, samples)
+        indices, samples
+    )
     indices, samples = accumulate_signal(s1i, s1)
-    SignalSamplesAreEqual("Accumulation",
+    SignalSamplesAreEqual(
+        "Accumulation",
         "resources/task2/outputs/output accumulation for signal1.txt",
-        indices, samples)
+        indices, samples
+    )
 
     print("\n===== QUANTIZATION TESTS =====")
     qi, qs = read_signal_file("resources/task2/inputs/Quan1_input.txt")
     interval, encoded, quantized, errors = quantize_signal(qi, qs, 8)
-    QuantizationTest1("resources/task2/outputs/Quan1_Out.txt", encoded, quantized)
+    QuantizationTest1(
+        "resources/task2/outputs/Quan1_Out.txt", encoded, quantized
+    )
 
     qi, qs = read_signal_file("resources/task2/inputs/Quan2_input.txt")
     interval, encoded, quantized, errors = quantize_signal(qi, qs, 4)
-    QuantizationTest2("resources/task2/outputs/Quan2_Out.txt",
-        interval, encoded, quantized, errors)
+    QuantizationTest2(
+        "resources/task2/outputs/Quan2_Out.txt",
+        interval, encoded, quantized, errors
+    )
 
     signals.clear()
     signals.extend(old_signals)
     print("\n===== TESTS FINISHED =====")
+
 
 # ==================== MAIN PROGRAM ====================
 
@@ -364,6 +501,7 @@ window.title("Signal Processing Framework")
 window.geometry("1200x750")
 
 menu_bar = tk.Menu(window)
+
 file_menu = tk.Menu(menu_bar, tearoff=0)
 file_menu.add_command(label="Load Signal", command=read_signal)
 file_menu.add_command(label="Clear All Signals", command=clear_signals)
@@ -384,6 +522,7 @@ menu_bar.add_cascade(label="Arithmetic Operations", menu=arithmetic_menu)
 test_menu = tk.Menu(menu_bar, tearoff=0)
 test_menu.add_command(label="Run Tests", command=run_tests)
 menu_bar.add_cascade(label="Testing", menu=test_menu)
+
 window.config(menu=menu_bar)
 
 tk.Button(window, text="Load Signal", command=read_signal, width=20).pack(pady=4)
