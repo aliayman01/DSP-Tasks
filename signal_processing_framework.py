@@ -411,10 +411,10 @@ def run_task3_tests():
     print("\n===== TASK 3 TESTS: DFT / IDFT / REMOVE DC =====")
     try:
         # DFT: compare the calculated magnitude and phase with the reference file
-        indices, samples = read_signal_file("resources/Task3/Test Cases/DFT/input_Signal_DFT.txt")
+        indices, samples = read_signal_file("Test Cases/DFT/input_Signal_DFT.txt")
         spectrum = calculate_dft(samples)
         expected_amplitudes, expected_phases = read_amplitude_phase_file(
-            "resources/Task3/Test Cases/DFT/Output_Signal_DFT_A,Phase.txt"
+            "Test Cases/DFT/Output_Signal_DFT_A,Phase.txt"
         )
         actual_amplitudes = [abs(value) for value in spectrum]
         actual_phases = [0.0 if abs(value) < 1e-12 else math.atan2(value.imag, value.real)
@@ -424,7 +424,7 @@ def run_task3_tests():
 
         # IDFT: convert the reference amplitude/phase pairs back to complex values
         input_amplitudes, input_phases = read_amplitude_phase_file(
-            "resources/Task3/Test Cases/IDFT/Input_Signal_IDFT_A,Phase.txt"
+            "Test Cases/IDFT/Input_Signal_IDFT_A,Phase.txt"
         )
         input_spectrum = []
         for i in range(len(input_amplitudes)):
@@ -434,24 +434,24 @@ def run_task3_tests():
                                           amplitude * math.sin(phase)))
         reconstructed_samples = calculate_idft(input_spectrum)
         expected_indices, expected_samples = read_signal_file(
-            "resources/Task3/Test Cases/IDFT/Output_Signal_IDFT.txt"
+            "Test Cases/IDFT/Output_Signal_IDFT.txt"
         )
         compare_test_values("IDFT", reconstructed_samples, expected_samples, 0.001)
 
         # Remove DC: set F(0) to zero and reconstruct the time-domain signal
         dc_indices, dc_samples = read_signal_file(
-            "resources/Task3/Remove DC component/DC_component_input.txt"
+            "Remove DC component/DC_component_input.txt"
         )
         dc_spectrum = calculate_dft(dc_samples)
         dc_spectrum[0] = 0j
         dc_result = calculate_idft(dc_spectrum)
         compare_test_signal(
             "Remove DC Component", dc_indices, dc_result,
-            "resources/Task3/Remove DC component/DC_component_output.txt", 0.001
+            "Remove DC component/DC_component_output.txt", 0.001
         )
     except (OSError, ValueError, IndexError) as error:
         print("Task 3 tests could not be completed:", error)
-        print("Make sure the Task 3 files are under resources/Task3/Test Cases and resources/Task3/Remove DC component.")
+        print("Make sure you extracted the 'Test Cases' and 'Remove DC component' folders into the project root.")
     print("===== TASK 3 TESTS FINISHED =====")
 
 def get_frequency_data():
